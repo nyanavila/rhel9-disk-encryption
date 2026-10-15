@@ -1,0 +1,5 @@
+*.log
+*.retry
+.vault_pass
+*.bin
+rhel9-disk-encryption.zip

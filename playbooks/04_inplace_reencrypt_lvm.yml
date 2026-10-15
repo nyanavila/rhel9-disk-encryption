@@ -1,0 +1,48 @@
+---
+- name: In-Place LVM Online Re-Encryption (Journaled Resilience)
+  hosts: all_clients
+  vars:
+    lv_path: "{{ target_dev }}"
+    mapped_name: "secure_{{ target_dev | basename }}"
+  tasks:
+    - name: Unmount Target Volume
+      ansible.posix.mount:
+        path: "/mnt/data"
+        state: unmounted
+
+    - name: Extend Underlying Logical Volume by 32 MB for LUKS2 Header
+      ansible.builtin.command:
+        cmd: lvextend -L+32M {{ lv_path }}
+      register: lvextend_res
+      changed_when: "'successfully resized' in lvextend_res.stdout"
+
+    - name: Initialize LUKS2 Encryption with Journaled Resilience
+      ansible.builtin.shell:
+        cmd: |
+          printf '%s' '{{ admin_passphrase }}' | cryptsetup reencrypt --encrypt --init-only --reduce-device-size 32M --resilience journal {{ lv_path }} {{ mapped_name }} -
+      no_log: true
+
+    - name: Gather LUKS Container UUID
+      ansible.builtin.command:
+        cmd: cryptsetup luksUUID {{ lv_path }}
+      register: luks_uuid
+      changed_when: false
+
+    - name: Configure Persistent /etc/crypttab Entry
+      ansible.builtin.lineinfile:
+        path: /etc/crypttab
+        line: "{{ mapped_name }} UUID={{ luks_uuid.stdout }} none"
+        state: present
+
+    - name: Update /etc/fstab with Cleartext Mapped Device
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: "^{{ lv_path }}"
+        line: "/dev/mapper/{{ mapped_name }} /mnt/data xfs defaults 0 2"
+        state: present
+
+    - name: Resume Bulk Encryption Pass in Background
+      ansible.builtin.shell:
+        cmd: |
+          printf '%s' '{{ admin_passphrase }}' | cryptsetup reencrypt --resume-only {{ lv_path }} -
+      no_log: true

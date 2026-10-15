@@ -1,0 +1,6 @@
+---
+client_ip: "192.0.2.52"
+client_gateway: "192.0.2.1"
+client_netmask: "255.255.255.0"
+client_interface: "ens3"
+client_nameserver: "192.0.2.100"

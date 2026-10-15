@@ -1,0 +1,10 @@
+---
+luks_cipher: "aes-xts-plain64"
+luks_key_size: 512
+luks_pbkdf: "argon2id"
+
+vault_addr: "https://vault.corp.internal:8200"
+vault_token_path: "/etc/vault/token"
+vault_secret_path: "secret/data/rhel-encryption"
+
+required_crashkernel: "652M"

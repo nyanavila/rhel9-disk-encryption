@@ -1,0 +1,17 @@
+---
+- name: Deploy and Configure High-Availability Tang Servers
+  hosts: tang_servers
+  tasks:
+    - name: Deploy Tang Server with Firewall and SELinux Enforcement
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.nbde_server
+      vars:
+        nbde_server_rotate_keys: true
+        nbde_server_manage_firewall: true
+        nbde_server_manage_selinux: true
+
+    - name: Ensure Tang Socket is Active
+      ansible.builtin.systemd:
+        name: tangd.socket
+        state: started
+        enabled: true

@@ -1,0 +1,38 @@
+---
+- name: Preflight Verification and Safety Gates
+  hosts: all_clients
+  gather_facts: true
+  vars_prompt:
+    - name: backup_confirmation
+      prompt: "Have bare-metal recovery tests been verified for these systems? (Type 'CONFIRMED' to proceed)"
+      private: false
+
+  tasks:
+    - name: Safety Gate - Enforce Tested Backup Confirmation
+      ansible.builtin.assert:
+        that:
+          - backup_confirmation == "CONFIRMED"
+        fail_msg: "ABORTING: Re-encryption must not proceed without verified bare-metal recovery backups."
+
+    - name: Check TPM 2.0 Device Node on Physical Hosts
+      ansible.builtin.stat:
+        path: /dev/tpmrm0
+      register: tpm_device
+      when: inventory_hostname in groups['physical_servers']
+
+    - name: Assert TPM 2.0 Presence on Physical Systems
+      ansible.builtin.assert:
+        that:
+          - tpm_device.stat.exists
+        fail_msg: "TPM 2.0 device node /dev/tpmrm0 missing. Verify TPM is enabled in UEFI/BIOS."
+      when: inventory_hostname in groups['physical_servers']
+
+    - name: Evaluate kdump Estimated Memory Budget
+      ansible.builtin.command:
+        cmd: kdumpctl estimate
+      register: kdump_estimate
+      changed_when: false
+
+    - name: Display kdump Memory Recommendation
+      ansible.builtin.debug:
+        msg: "{{ kdump_estimate.stdout_lines }}"

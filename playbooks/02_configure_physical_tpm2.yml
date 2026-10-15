@@ -1,0 +1,35 @@
+---
+- name: Automate Physical Server TPM 2.0 Policy-Based Decryption
+  hosts: physical_servers
+  tasks:
+    - name: Install Clevis TPM2 and Dracut Packages
+      ansible.builtin.dnf:
+        name:
+          - clevis
+          - clevis-luks
+          - clevis-dracut
+          - tpm2-tools
+        state: present
+
+    - name: Generate Random Break-Glass Admin Passphrase
+      ansible.builtin.set_fact:
+        admin_passphrase: "{{ lookup('ansible.builtin.password', '/dev/null length=32 chars=ascii_letters,digits,hexdigits') }}"
+      no_log: true
+
+    - name: Enroll Admin Passphrase into Keyslot 0
+      ansible.builtin.shell:
+        cmd: |
+          printf '%s' '{{ admin_passphrase }}' | cryptsetup luksAddKey {{ target_dev }} -
+      no_log: true
+
+    - name: Bind LUKS Volume to TPM 2.0 with PCR 0,7 Sealing
+      ansible.builtin.shell:
+        cmd: |
+          printf '%s' '{{ admin_passphrase }}' | clevis luks bind -d {{ target_dev }} tpm2 '{"pcr_bank":"{{ tpm2_pcr_bank }}","pcr_ids":"{{ tpm2_pcr_ids }}"}' -
+      register: clevis_bind
+      changed_when: clevis_bind.rc == 0
+
+    - name: Regenerate initramfs to Enable TPM Early Boot Unlocking
+      ansible.builtin.command:
+        cmd: dracut -fv --regenerate-all
+      changed_when: true

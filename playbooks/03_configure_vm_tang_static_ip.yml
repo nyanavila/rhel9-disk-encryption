@@ -1,0 +1,35 @@
+---
+- name: Configure Virtual Machine Tang NBDE with Early-Boot Static IP
+  hosts: virtual_machines
+  tasks:
+    - name: Configure Static IP Kernel Boot Parameter via Bootloader System Role
+      ansible.builtin.include_role:
+        name: redhat.rhel_system_roles.bootloader
+      vars:
+        bootloader_settings:
+          - kernel: ALL
+            options:
+              - name: ip
+                value: "{{ client_ip }}::{{ client_gateway }}:{{ client_netmask }}::{{ client_interface }}:none nameserver={{ client_nameserver }}"
+              - name: rd.neednet
+                value: "1"
+
+    - name: Configure Drop-in Dracut Static IP File
+      ansible.builtin.copy:
+        dest: /etc/dracut.conf.d/static_ip.conf
+        content: |
+          kernel_cmdline="ip={{ client_ip }}::{{ client_gateway }}:{{ client_netmask }}::{{ client_interface }}:none nameserver={{ client_nameserver }} rd.neednet=1"
+          hostonly_cmdline="yes"
+        mode: '0644'
+
+    - name: Bind VM LUKS Volume to Redundant Tang Servers using Shamir's Secret Sharing (SSS)
+      ansible.builtin.shell:
+        cmd: |
+          clevis luks bind -d {{ target_dev }} sss '{"t":1,"pins":{"tang":[{"url":"{{ tang_servers[0] }}"},{"url":"{{ tang_servers[1] }}"}]}}'
+      register: sss_bind
+      changed_when: sss_bind.rc == 0
+
+    - name: Regenerate initramfs with Network Modules
+      ansible.builtin.command:
+        cmd: dracut -fv --regenerate-all
+      changed_when: true

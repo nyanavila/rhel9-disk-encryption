@@ -1,0 +1,5 @@
+---
+clevis_pin: "tang"
+tang_servers:
+  - "http://192.0.2.20:7500"
+  - "http://192.0.2.21:7500"

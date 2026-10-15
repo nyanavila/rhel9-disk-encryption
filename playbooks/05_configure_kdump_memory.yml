@@ -1,0 +1,26 @@
+---
+- name: Hardening Kdump Memory on LUKS Encrypted Targets
+  hosts: all_clients
+  tasks:
+    - name: Query Current and Recommended Crashkernel Values
+      ansible.builtin.command:
+        cmd: kdumpctl estimate
+      register: kdump_est
+      changed_when: false
+
+    - name: Update Bootloader with 652M Crashkernel Parameter
+      ansible.builtin.command:
+        cmd: grubby --args="crashkernel={{ required_crashkernel }}" --update-kernel=ALL
+      register: grubby_out
+      changed_when: grubby_out.rc == 0
+
+    - name: Link LUKS Volume Key to Kernel Keyring (RHEL 9.8+ Optional Feature)
+      ansible.builtin.command:
+        cmd: kdumpctl setup-crypttab
+      failed_when: false
+      changed_when: true
+
+    - name: Restart kdump Service
+      ansible.builtin.systemd:
+        name: kdump
+        state: restarted
